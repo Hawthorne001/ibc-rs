@@ -4,11 +4,12 @@ use ibc::core::client::context::client_state::ClientStateValidation;
 use ibc::core::client::context::ClientValidationContext;
 use ibc::core::client::types::error::ClientError;
 use ibc::core::host::types::path::{
-    ClientConsensusStatePath, ClientStatePath, Path, UpgradeClientPath,
+    ClientConsensusStatePath, ClientStatePath, Path, UpgradeClientStatePath,
+    UpgradeConsensusStatePath, UPGRADED_IBC_STATE,
 };
 use ibc::core::host::{ConsensusStateRef, ValidationContext};
 use ibc::cosmos_host::upgrade_proposal::{UpgradeValidationContext, UpgradedConsensusStateRef};
-use ibc::primitives::prelude::format;
+use ibc::primitives::prelude::{format, ToString};
 use ibc::primitives::proto::Any;
 
 use super::{
@@ -49,7 +50,7 @@ where
             &Path::ClientState(ClientStatePath::new(client_id.clone())),
         )
         .ok_or_else(|| {
-            QueryError::proof_not_found(format!(
+            QueryError::missing_proof(format!(
                 "Proof not found for client state path: {client_id:?}"
             ))
         })?;
@@ -108,7 +109,7 @@ where
             .into_iter()
             .max_by_key(|&(h, _)| h)
             .ok_or_else(|| {
-                QueryError::proof_not_found(format!(
+                QueryError::missing_proof(format!(
                     "No consensus state found for client: {client_id:?}"
                 ))
             })?
@@ -129,7 +130,7 @@ where
             )),
         )
         .ok_or_else(|| {
-            QueryError::proof_not_found(format!(
+            QueryError::missing_proof(format!(
                 "Proof not found for consensus state path: {client_id:?}"
             ))
         })?;
@@ -205,6 +206,12 @@ where
     I: ValidationContext,
     U: UpgradeValidationContext + ProvableContext,
 {
+    let upgrade_path = match &request.upgrade_path {
+        Some(path) if !path.is_empty() => path,
+        _ => UPGRADED_IBC_STATE,
+    }
+    .to_string();
+
     let upgrade_revision_height = match request.upgrade_height {
         Some(height) => height.revision_height(),
         None => {
@@ -215,8 +222,10 @@ where
         }
     };
 
-    let upgraded_client_state_path =
-        UpgradeClientPath::UpgradedClientState(upgrade_revision_height);
+    let upgraded_client_state_path = UpgradeClientStatePath {
+        upgrade_path,
+        height: upgrade_revision_height,
+    };
 
     let upgraded_client_state = upgrade_ctx
         .upgraded_client_state(&upgraded_client_state_path)
@@ -230,10 +239,10 @@ where
     let proof = upgrade_ctx
         .get_proof(
             proof_height,
-            &Path::UpgradeClient(upgraded_client_state_path),
+            &Path::UpgradeClientState(upgraded_client_state_path),
         )
         .ok_or_else(|| {
-            QueryError::proof_not_found(format!(
+            QueryError::missing_proof(format!(
                 "Proof not found for upgraded client state at: {proof_height:?}"
             ))
         })?;
@@ -256,6 +265,12 @@ where
     U: UpgradeValidationContext + ProvableContext,
     UpgradedConsensusStateRef<U>: Into<Any>,
 {
+    let upgrade_path = match &request.upgrade_path {
+        Some(path) if !path.is_empty() => path,
+        _ => UPGRADED_IBC_STATE,
+    }
+    .to_string();
+
     let upgrade_revision_height = match request.upgrade_height {
         Some(height) => height.revision_height(),
         None => {
@@ -266,8 +281,10 @@ where
         }
     };
 
-    let upgraded_consensus_state_path =
-        UpgradeClientPath::UpgradedClientConsensusState(upgrade_revision_height);
+    let upgraded_consensus_state_path = UpgradeConsensusStatePath {
+        upgrade_path,
+        height: upgrade_revision_height,
+    };
 
     let upgraded_consensus_state = upgrade_ctx
         .upgraded_consensus_state(&upgraded_consensus_state_path)
@@ -281,10 +298,10 @@ where
     let proof = upgrade_ctx
         .get_proof(
             proof_height,
-            &Path::UpgradeClient(upgraded_consensus_state_path),
+            &Path::UpgradeConsensusState(upgraded_consensus_state_path),
         )
         .ok_or_else(|| {
-            QueryError::proof_not_found(format!(
+            QueryError::missing_proof(format!(
                 "Proof not found for upgraded consensus state at: {proof_height:?}"
             ))
         })?;

@@ -42,6 +42,43 @@ pub const UPGRADED_CLIENT_STATE: &str = "upgradedClient";
 /// - The key identifying the upgraded consensus state
 pub const UPGRADED_CLIENT_CONSENSUS_STATE: &str = "upgradedConsState";
 
+/// Represents a general-purpose path structure using the byte representation of
+/// a path. This struct abstracts over different path types and can handle bytes
+/// obtained from various serialization formats (e.g., Protobuf, Borsh).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, From)]
+pub struct PathBytes(Vec<u8>);
+
+impl PathBytes {
+    pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Self {
+        Self(bytes.as_ref().to_vec())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
+    }
+
+    /// Flattens a list of path bytes into a single path.
+    pub fn flatten<T: AsRef<[u8]>>(paths: Vec<T>) -> Self {
+        let mut bytes = Vec::new();
+        paths.iter().for_each(|path| {
+            bytes.extend_from_slice(path.as_ref());
+        });
+        Self(bytes)
+    }
+}
+
+impl AsRef<[u8]> for PathBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 /// The Path enum abstracts out the different sub-paths.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, From, Display)]
 pub enum Path {
@@ -62,7 +99,8 @@ pub enum Path {
     Commitment(CommitmentPath),
     Ack(AckPath),
     Receipt(ReceiptPath),
-    UpgradeClient(UpgradeClientPath),
+    UpgradeClientState(UpgradeClientStatePath),
+    UpgradeConsensusState(UpgradeConsensusStatePath),
 }
 
 #[cfg_attr(
@@ -79,7 +117,7 @@ pub enum Path {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_CLIENT_SEQUENCE}")]
+#[display("{NEXT_CLIENT_SEQUENCE}")]
 pub struct NextClientSequencePath;
 
 #[cfg_attr(
@@ -96,7 +134,7 @@ pub struct NextClientSequencePath;
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_CONNECTION_SEQUENCE}")]
+#[display("{NEXT_CONNECTION_SEQUENCE}")]
 pub struct NextConnectionSequencePath;
 
 #[cfg_attr(
@@ -113,7 +151,7 @@ pub struct NextConnectionSequencePath;
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_CHANNEL_SEQUENCE}")]
+#[display("{NEXT_CHANNEL_SEQUENCE}")]
 pub struct NextChannelSequencePath;
 
 #[cfg_attr(
@@ -130,7 +168,7 @@ pub struct NextChannelSequencePath;
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display, From)]
-#[display(fmt = "{CLIENT_PREFIX}/{_0}/{CLIENT_STATE}")]
+#[display("{CLIENT_PREFIX}/{_0}/{CLIENT_STATE}")]
 pub struct ClientStatePath(pub ClientId);
 
 impl ClientStatePath {
@@ -166,7 +204,7 @@ impl ClientStatePath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}"
+    "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}"
 )]
 pub struct ClientConsensusStatePath {
     pub client_id: ClientId,
@@ -226,7 +264,7 @@ impl ClientConsensusStatePath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}/{PROCESSED_TIME}"
+    "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}/{PROCESSED_TIME}"
 )]
 pub struct ClientUpdateTimePath {
     pub client_id: ClientId,
@@ -276,7 +314,7 @@ impl ClientUpdateTimePath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}/{PROCESSED_HEIGHT}"
+    "{CLIENT_PREFIX}/{client_id}/{CONSENSUS_STATE_PREFIX}/{revision_number}-{revision_height}/{PROCESSED_HEIGHT}"
 )]
 pub struct ClientUpdateHeightPath {
     pub client_id: ClientId,
@@ -345,7 +383,7 @@ pub fn iteration_key(revision_number: u64, revision_height: u64) -> Vec<u8> {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{CLIENT_PREFIX}/{_0}/{CONNECTION_PREFIX}")]
+#[display("{CLIENT_PREFIX}/{_0}/{CONNECTION_PREFIX}")]
 pub struct ClientConnectionPath(pub ClientId);
 
 impl ClientConnectionPath {
@@ -368,7 +406,7 @@ impl ClientConnectionPath {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{CONNECTION_PREFIX}/{_0}")]
+#[display("{CONNECTION_PREFIX}/{_0}")]
 pub struct ConnectionPath(pub ConnectionId);
 
 impl ConnectionPath {
@@ -397,7 +435,7 @@ impl ConnectionPath {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{PORT_PREFIX}/{_0}")]
+#[display("{PORT_PREFIX}/{_0}")]
 pub struct PortPath(pub PortId);
 
 #[cfg_attr(
@@ -414,7 +452,7 @@ pub struct PortPath(pub PortId);
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{CHANNEL_END_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
+#[display("{CHANNEL_END_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
 pub struct ChannelEndPath(pub PortId, pub ChannelId);
 
 impl ChannelEndPath {
@@ -471,7 +509,7 @@ impl ChannelEndPath {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_SEQ_SEND_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
+#[display("{NEXT_SEQ_SEND_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
 pub struct SeqSendPath(pub PortId, pub ChannelId);
 
 impl SeqSendPath {
@@ -494,7 +532,7 @@ impl SeqSendPath {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_SEQ_RECV_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
+#[display("{NEXT_SEQ_RECV_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
 pub struct SeqRecvPath(pub PortId, pub ChannelId);
 
 impl SeqRecvPath {
@@ -517,7 +555,7 @@ impl SeqRecvPath {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display(fmt = "{NEXT_SEQ_ACK_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
+#[display("{NEXT_SEQ_ACK_PREFIX}/{PORT_PREFIX}/{_0}/{CHANNEL_PREFIX}/{_1}")]
 pub struct SeqAckPath(pub PortId, pub ChannelId);
 
 impl SeqAckPath {
@@ -541,7 +579,7 @@ impl SeqAckPath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{PACKET_COMMITMENT_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
+    "{PACKET_COMMITMENT_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
 )]
 pub struct CommitmentPath {
     pub port_id: PortId,
@@ -580,7 +618,7 @@ impl CommitmentPath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{PACKET_ACK_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
+    "{PACKET_ACK_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
 )]
 pub struct AckPath {
     pub port_id: PortId,
@@ -619,7 +657,7 @@ impl AckPath {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
 #[display(
-    fmt = "{PACKET_RECEIPT_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
+    "{PACKET_RECEIPT_PREFIX}/{PORT_PREFIX}/{port_id}/{CHANNEL_PREFIX}/{channel_id}/{SEQUENCE_PREFIX}/{sequence}"
 )]
 pub struct ReceiptPath {
     pub port_id: PortId,
@@ -656,13 +694,51 @@ impl ReceiptPath {
     derive(borsh::BorshSerialize, borsh::BorshDeserialize)
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Paths that are specific for client upgrades.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-pub enum UpgradeClientPath {
-    #[display(fmt = "{UPGRADED_IBC_STATE}/{_0}/{UPGRADED_CLIENT_STATE}")]
-    UpgradedClientState(u64),
-    #[display(fmt = "{UPGRADED_IBC_STATE}/{_0}/{UPGRADED_CLIENT_CONSENSUS_STATE}")]
-    UpgradedClientConsensusState(u64),
+#[display("{upgrade_path}/{height}/{UPGRADED_CLIENT_STATE}")]
+pub struct UpgradeClientStatePath {
+    pub upgrade_path: String,
+    pub height: u64,
+}
+
+impl UpgradeClientStatePath {
+    /// Create with the default upgrade path
+    pub fn new_with_default_path(height: u64) -> Self {
+        Self {
+            upgrade_path: UPGRADED_IBC_STATE.to_string(),
+            height,
+        }
+    }
+}
+
+#[cfg_attr(
+    feature = "parity-scale-codec",
+    derive(
+        parity_scale_codec::Encode,
+        parity_scale_codec::Decode,
+        scale_info::TypeInfo
+    )
+)]
+#[cfg_attr(
+    feature = "borsh",
+    derive(borsh::BorshSerialize, borsh::BorshDeserialize)
+)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
+#[display("{upgrade_path}/{height}/{UPGRADED_CLIENT_CONSENSUS_STATE}")]
+pub struct UpgradeConsensusStatePath {
+    pub upgrade_path: String,
+    pub height: u64,
+}
+
+impl UpgradeConsensusStatePath {
+    /// Create with the default upgrade path
+    pub fn new_with_default_path(height: u64) -> Self {
+        Self {
+            upgrade_path: UPGRADED_IBC_STATE.to_string(),
+            height,
+        }
+    }
 }
 
 #[cfg_attr(
@@ -723,7 +799,8 @@ impl FromStr for Path {
             .or_else(|| parse_commitments(&components))
             .or_else(|| parse_acks(&components))
             .or_else(|| parse_receipts(&components))
-            .or_else(|| parse_upgrades(&components))
+            .or_else(|| parse_upgrade_client_state(&components))
+            .or_else(|| parse_upgrade_consensus_state(&components))
             .ok_or(PathError::ParseFailure {
                 path: s.to_string(),
             })
@@ -1047,28 +1124,52 @@ fn parse_receipts(components: &[&str]) -> Option<Path> {
     )
 }
 
-fn parse_upgrades(components: &[&str]) -> Option<Path> {
+fn parse_upgrade_client_state(components: &[&str]) -> Option<Path> {
     if components.len() != 3 {
-        return None;
-    }
-
-    let first = *components.first()?;
-
-    if first != UPGRADED_IBC_STATE {
         return None;
     }
 
     let last = *components.last()?;
 
-    let height = components[1].parse::<u64>().ok()?;
-
-    match last {
-        UPGRADED_CLIENT_STATE => Some(UpgradeClientPath::UpgradedClientState(height).into()),
-        UPGRADED_CLIENT_CONSENSUS_STATE => {
-            Some(UpgradeClientPath::UpgradedClientConsensusState(height).into())
-        }
-        _ => None,
+    if last != UPGRADED_CLIENT_STATE {
+        return None;
     }
+
+    let upgrade_path = components.first()?.to_string();
+
+    let height = u64::from_str(components[1]).ok()?;
+
+    Some(
+        UpgradeClientStatePath {
+            upgrade_path,
+            height,
+        }
+        .into(),
+    )
+}
+
+fn parse_upgrade_consensus_state(components: &[&str]) -> Option<Path> {
+    if components.len() != 3 {
+        return None;
+    }
+
+    let last = *components.last()?;
+
+    if last != UPGRADED_CLIENT_CONSENSUS_STATE {
+        return None;
+    }
+
+    let upgrade_path = components.first()?.to_string();
+
+    let height = u64::from_str(components[1]).ok()?;
+
+    Some(
+        UpgradeConsensusStatePath {
+            upgrade_path,
+            height,
+        }
+        .into(),
+    )
 }
 
 #[cfg(test)]
@@ -1170,11 +1271,17 @@ mod tests {
     )]
     #[case(
         "upgradedIBCState/0/upgradedClient",
-        Path::UpgradeClient(UpgradeClientPath::UpgradedClientState(0))
+        Path::UpgradeClientState(UpgradeClientStatePath {
+            upgrade_path: UPGRADED_IBC_STATE.to_string(),
+            height: 0,
+        })
     )]
     #[case(
         "upgradedIBCState/0/upgradedConsState",
-        Path::UpgradeClient(UpgradeClientPath::UpgradedClientConsensusState(0))
+        Path::UpgradeConsensusState(UpgradeConsensusStatePath {
+            upgrade_path: UPGRADED_IBC_STATE.to_string(),
+            height: 0,
+        })
     )]
     fn test_successful_parsing(#[case] path_str: &str, #[case] path: Path) {
         // can be parsed into Path
@@ -1382,25 +1489,30 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_upgrades_fn() {
+    fn test_parse_upgrade_client_state_fn() {
         let path = "upgradedIBCState/0/upgradedClient";
         let components: Vec<&str> = path.split('/').collect();
 
         assert_eq!(
-            parse_upgrades(&components),
-            Some(Path::UpgradeClient(UpgradeClientPath::UpgradedClientState(
-                0
-            ))),
+            parse_upgrade_client_state(&components),
+            Some(Path::UpgradeClientState(UpgradeClientStatePath {
+                upgrade_path: UPGRADED_IBC_STATE.to_string(),
+                height: 0,
+            })),
         );
+    }
 
+    #[test]
+    fn test_parse_upgrade_consensus_state_fn() {
         let path = "upgradedIBCState/0/upgradedConsState";
         let components: Vec<&str> = path.split('/').collect();
 
         assert_eq!(
-            parse_upgrades(&components),
-            Some(Path::UpgradeClient(
-                UpgradeClientPath::UpgradedClientConsensusState(0)
-            )),
+            parse_upgrade_consensus_state(&components),
+            Some(Path::UpgradeConsensusState(UpgradeConsensusStatePath {
+                upgrade_path: UPGRADED_IBC_STATE.to_string(),
+                height: 0,
+            })),
         )
     }
 }

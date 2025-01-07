@@ -1,13 +1,14 @@
-use ibc_client_tendermint_types::error::{Error, IntoResult};
+use ibc_client_tendermint_types::error::{IntoResult, TendermintClientError};
 use ibc_client_tendermint_types::{
     ConsensusState as ConsensusStateType, Header as TmHeader, Misbehaviour as TmMisbehaviour,
 };
 use ibc_core_client::context::{Convertible, ExtClientValidationContext};
 use ibc_core_client::types::error::ClientError;
+use ibc_core_host::types::error::IdentifierError;
 use ibc_core_host::types::identifiers::{ChainId, ClientId};
 use ibc_core_host::types::path::ClientConsensusStatePath;
 use ibc_primitives::prelude::*;
-use ibc_primitives::Timestamp;
+use ibc_primitives::{IntoHostTime, IntoTimestamp, Timestamp};
 use tendermint::crypto::Sha256;
 use tendermint::merkle::MerkleHash;
 use tendermint::{Hash, Time};
@@ -84,7 +85,7 @@ pub fn verify_misbehaviour_header<H>(
     header: &TmHeader,
     chain_id: &ChainId,
     options: &Options,
-    trusted_timestamp: Time,
+    trusted_time: Time,
     trusted_next_validator_hash: Hash,
     current_timestamp: Timestamp,
     verifier: &impl Verifier,
@@ -97,15 +98,15 @@ where
 
     // ensure trusted consensus state is within trusting period
     {
-        let duration_since_consensus_state = current_timestamp
-            .duration_since(&trusted_timestamp.into())
-            .ok_or_else(|| ClientError::InvalidConsensusStateTimestamp {
-                time1: trusted_timestamp.into(),
-                time2: current_timestamp,
-            })?;
+        let trusted_timestamp = trusted_time.into_timestamp()?;
+
+        let duration_since_consensus_state =
+            current_timestamp.duration_since(&trusted_timestamp).ok_or(
+                ClientError::InvalidConsensusStateTimestamp(trusted_timestamp),
+            )?;
 
         if duration_since_consensus_state >= options.trusting_period {
-            return Err(Error::ConsensusStateTimestampGteTrustingPeriod {
+            return Err(TendermintClientError::InsufficientTrustingPeriod {
                 duration_since_consensus_state,
                 trusting_period: options.trusting_period,
             }
@@ -116,22 +117,18 @@ where
     // main header verification, delegated to the tendermint-light-client crate.
     let untrusted_state = header.as_untrusted_block_state();
 
-    let tm_chain_id = &chain_id
-        .as_str()
-        .try_into()
-        .map_err(|e| ClientError::Other {
-            description: format!("failed to parse chain id: {e}"),
-        })?;
+    let tm_chain_id =
+        &chain_id
+            .as_str()
+            .try_into()
+            .map_err(|e| IdentifierError::FailedToParse {
+                description: format!("chain ID `{chain_id}`: {e:?}"),
+            })?;
 
-    let trusted_state = header.as_trusted_block_state(
-        tm_chain_id,
-        trusted_timestamp,
-        trusted_next_validator_hash,
-    )?;
+    let trusted_state =
+        header.as_trusted_block_state(tm_chain_id, trusted_time, trusted_next_validator_hash)?;
 
-    let current_timestamp = current_timestamp.into_tm_time().ok_or(ClientError::Other {
-        description: "host timestamp must not be zero".to_string(),
-    })?;
+    let current_timestamp = current_timestamp.into_host_time()?;
 
     verifier
         .verify_misbehaviour_header(untrusted_state, trusted_state, options, current_timestamp)

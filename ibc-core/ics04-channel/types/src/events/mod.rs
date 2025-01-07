@@ -3,9 +3,9 @@
 mod channel_attributes;
 mod packet_attributes;
 
+use ibc_core_host_types::error::DecodingError;
 use ibc_core_host_types::identifiers::{ChannelId, ConnectionId, PortId, Sequence};
 use ibc_primitives::prelude::*;
-use ibc_primitives::Timestamp;
 use tendermint::abci;
 
 use self::channel_attributes::{
@@ -22,8 +22,8 @@ use super::acknowledgement::Acknowledgement;
 use super::channel::Order;
 use super::timeout::TimeoutHeight;
 use super::Version;
-use crate::error::ChannelError;
 use crate::packet::Packet;
+use crate::timeout::TimeoutTimestamp;
 
 /// Channel event types corresponding to ibc-go's channel events:
 /// https://github.com/cosmos/ibc-go/blob/c4413c5877f9ef883494da1721cb18caaba7f7f5/modules/core/04-channel/types/events.go#L52-L72
@@ -633,7 +633,7 @@ impl SendPacket {
         &self.timeout_height_attr_on_b.timeout_height
     }
 
-    pub fn timeout_timestamp_on_b(&self) -> &Timestamp {
+    pub fn timeout_timestamp_on_b(&self) -> &TimeoutTimestamp {
         &self.timeout_timestamp_attr_on_b.timeout_timestamp
     }
 
@@ -671,7 +671,7 @@ impl SendPacket {
 }
 
 impl TryFrom<SendPacket> for abci::Event {
-    type Error = ChannelError;
+    type Error = DecodingError;
 
     fn try_from(v: SendPacket) -> Result<Self, Self::Error> {
         let mut attributes = Vec::with_capacity(11);
@@ -744,7 +744,7 @@ impl ReceivePacket {
         &self.timeout_height_attr_on_b.timeout_height
     }
 
-    pub fn timeout_timestamp_on_b(&self) -> &Timestamp {
+    pub fn timeout_timestamp_on_b(&self) -> &TimeoutTimestamp {
         &self.timeout_timestamp_attr_on_b.timeout_timestamp
     }
 
@@ -782,7 +782,7 @@ impl ReceivePacket {
 }
 
 impl TryFrom<ReceivePacket> for abci::Event {
-    type Error = ChannelError;
+    type Error = DecodingError;
 
     fn try_from(v: ReceivePacket) -> Result<Self, Self::Error> {
         let mut attributes = Vec::with_capacity(11);
@@ -859,7 +859,7 @@ impl WriteAcknowledgement {
         &self.timeout_height_attr_on_b.timeout_height
     }
 
-    pub fn timeout_timestamp_on_b(&self) -> &Timestamp {
+    pub fn timeout_timestamp_on_b(&self) -> &TimeoutTimestamp {
         &self.timeout_timestamp_attr_on_b.timeout_timestamp
     }
 
@@ -897,7 +897,7 @@ impl WriteAcknowledgement {
 }
 
 impl TryFrom<WriteAcknowledgement> for abci::Event {
-    type Error = ChannelError;
+    type Error = DecodingError;
 
     fn try_from(v: WriteAcknowledgement) -> Result<Self, Self::Error> {
         let mut attributes = Vec::with_capacity(11);
@@ -964,7 +964,7 @@ impl AcknowledgePacket {
         &self.timeout_height_attr_on_b.timeout_height
     }
 
-    pub fn timeout_timestamp_on_b(&self) -> &Timestamp {
+    pub fn timeout_timestamp_on_b(&self) -> &TimeoutTimestamp {
         &self.timeout_timestamp_attr_on_b.timeout_timestamp
     }
 
@@ -1002,7 +1002,7 @@ impl AcknowledgePacket {
 }
 
 impl TryFrom<AcknowledgePacket> for abci::Event {
-    type Error = ChannelError;
+    type Error = DecodingError;
 
     fn try_from(v: AcknowledgePacket) -> Result<Self, Self::Error> {
         Ok(abci::Event {
@@ -1065,7 +1065,7 @@ impl TimeoutPacket {
         &self.timeout_height_attr_on_b.timeout_height
     }
 
-    pub fn timeout_timestamp_on_b(&self) -> &Timestamp {
+    pub fn timeout_timestamp_on_b(&self) -> &TimeoutTimestamp {
         &self.timeout_timestamp_attr_on_b.timeout_timestamp
     }
 
@@ -1099,7 +1099,7 @@ impl TimeoutPacket {
 }
 
 impl TryFrom<TimeoutPacket> for abci::Event {
-    type Error = ChannelError;
+    type Error = DecodingError;
 
     fn try_from(v: TimeoutPacket) -> Result<Self, Self::Error> {
         Ok(abci::Event {

@@ -1,23 +1,59 @@
 //! Merkle proof utilities
 
+use ibc_core_host_types::error::DecodingError;
+use ibc_core_host_types::path::PathBytes;
 use ibc_primitives::prelude::*;
 use ibc_primitives::proto::Protobuf;
-use ibc_proto::ibc::core::commitment::v1::{MerklePath, MerkleProof as RawMerkleProof, MerkleRoot};
+use ibc_proto::ibc::core::commitment::v1::{
+    MerklePath as RawMerklePath, MerkleProof as RawMerkleProof, MerkleRoot,
+};
 use ibc_proto::ics23::commitment_proof::Proof;
 use ibc_proto::ics23::{
     calculate_existence_root, verify_membership, verify_non_membership, CommitmentProof,
     HostFunctionsProvider, NonExistenceProof,
 };
 
-use crate::commitment::{CommitmentPrefix, CommitmentRoot};
+use crate::commitment::CommitmentRoot;
 use crate::error::CommitmentError;
 use crate::specs::ProofSpecs;
 
-pub fn apply_prefix(prefix: &CommitmentPrefix, mut path: Vec<String>) -> MerklePath {
-    let mut key_path: Vec<String> = vec![format!("{prefix:?}")];
-    key_path.append(&mut path);
-    MerklePath { key_path }
+/// A wrapper type representing a Merkle path, consisting of a sequence of path
+/// bytes.
+///
+/// This struct by definition is compatible with Cosmos SDK chains, but it is
+/// also applicable to other blockchain implementations that follow similar path
+/// structures. Note that while Cosmos SDK chains and some non-Cosmos chains
+/// adhere to this definition, it may not be universally applicable to all
+/// non-Cosmos chains.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct MerklePath {
+    pub key_path: Vec<PathBytes>,
 }
+
+impl MerklePath {
+    /// Constructs a new `MerklePath` from a given `Vec<PathBytes>`.
+    pub fn new(key_path: Vec<PathBytes>) -> Self {
+        Self { key_path }
+    }
+}
+
+impl From<RawMerklePath> for MerklePath {
+    fn from(path: RawMerklePath) -> Self {
+        Self {
+            key_path: path
+                .key_path
+                .into_iter()
+                .map(|p| p.into_bytes().into())
+                .collect(),
+        }
+    }
+}
+
+// The conversion from `MerklePath` to `RawMerklePath` is not provided, as we
+// cannot assume how the key paths of `Vec<PathBytes>` type should be serialized
+// to the `Vec<String>`.
 
 impl From<CommitmentRoot> for MerkleRoot {
     fn from(root: CommitmentRoot) -> Self {
@@ -35,7 +71,7 @@ pub struct MerkleProof {
 impl Protobuf<RawMerkleProof> for MerkleProof {}
 
 impl TryFrom<RawMerkleProof> for MerkleProof {
-    type Error = CommitmentError;
+    type Error = DecodingError;
 
     fn try_from(proof: RawMerkleProof) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -63,21 +99,27 @@ impl MerkleProof {
     ) -> Result<(), CommitmentError> {
         // validate arguments
         if self.proofs.is_empty() {
-            return Err(CommitmentError::EmptyMerkleProof);
+            return Err(CommitmentError::MissingMerkleProof);
         }
         if root.hash.is_empty() {
-            return Err(CommitmentError::EmptyMerkleRoot);
+            return Err(CommitmentError::MissingMerkleRoot);
         }
         let num = self.proofs.len();
         let ics23_specs = Vec::<ics23::ProofSpec>::from(specs.clone());
         if ics23_specs.len() != num {
-            return Err(CommitmentError::NumberOfSpecsMismatch);
+            return Err(CommitmentError::MismatchedNumberOfProofs {
+                expected: ics23_specs.len(),
+                actual: num,
+            });
         }
         if keys.key_path.len() != num {
-            return Err(CommitmentError::NumberOfKeysMismatch);
+            return Err(CommitmentError::MismatchedNumberOfProofs {
+                expected: keys.key_path.len(),
+                actual: num,
+            });
         }
         if value.is_empty() {
-            return Err(CommitmentError::EmptyVerifiedValue);
+            return Err(CommitmentError::MissingVerifiedValue);
         }
 
         let mut subroot = value.clone();
@@ -99,8 +141,8 @@ impl MerkleProof {
                     subroot = calculate_existence_root::<H>(existence_proof)
                         .map_err(|_| CommitmentError::InvalidMerkleProof)?;
 
-                    if !verify_membership::<H>(proof, spec, &subroot, key.as_bytes(), &value) {
-                        return Err(CommitmentError::VerificationFailure);
+                    if !verify_membership::<H>(proof, spec, &subroot, key.as_ref(), &value) {
+                        return Err(CommitmentError::FailedToVerifyMembership);
                     }
                     value.clone_from(&subroot);
                 }
@@ -109,7 +151,7 @@ impl MerkleProof {
         }
 
         if root.hash != subroot {
-            return Err(CommitmentError::VerificationFailure);
+            return Err(CommitmentError::FailedToVerifyMembership);
         }
 
         Ok(())
@@ -123,18 +165,24 @@ impl MerkleProof {
     ) -> Result<(), CommitmentError> {
         // validate arguments
         if self.proofs.is_empty() {
-            return Err(CommitmentError::EmptyMerkleProof);
+            return Err(CommitmentError::MissingMerkleProof);
         }
         if root.hash.is_empty() {
-            return Err(CommitmentError::EmptyMerkleRoot);
+            return Err(CommitmentError::MissingMerkleRoot);
         }
         let num = self.proofs.len();
         let ics23_specs = Vec::<ics23::ProofSpec>::from(specs.clone());
         if ics23_specs.len() != num {
-            return Err(CommitmentError::NumberOfSpecsMismatch);
+            return Err(CommitmentError::MismatchedNumberOfProofs {
+                actual: num,
+                expected: ics23_specs.len(),
+            });
         }
         if keys.key_path.len() != num {
-            return Err(CommitmentError::NumberOfKeysMismatch);
+            return Err(CommitmentError::MismatchedNumberOfProofs {
+                actual: num,
+                expected: keys.key_path.len(),
+            });
         }
 
         // verify the absence of key in lowest subtree
@@ -154,8 +202,8 @@ impl MerkleProof {
             Some(Proof::Nonexist(non_existence_proof)) => {
                 let subroot = calculate_non_existence_root::<H>(non_existence_proof)?;
 
-                if !verify_non_membership::<H>(proof, spec, &subroot, key.as_bytes()) {
-                    return Err(CommitmentError::VerificationFailure);
+                if !verify_non_membership::<H>(proof, spec, &subroot, key.as_ref()) {
+                    return Err(CommitmentError::FailedToVerifyMembership);
                 }
 
                 // verify membership proofs starting from index 1 with value = subroot

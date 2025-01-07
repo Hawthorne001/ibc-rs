@@ -15,7 +15,10 @@ use tendermint::crypto::Sha256 as Sha256Trait;
 use tendermint::merkle::MerkleHash;
 use tendermint_light_client_verifier::{ProdVerifier, Verifier};
 
-use super::{check_for_misbehaviour_on_misbehavior, check_for_misbehaviour_on_update, ClientState};
+use super::{
+    check_for_misbehaviour_on_misbehavior, check_for_misbehaviour_on_update,
+    consensus_state_status, ClientState,
+};
 use crate::client_state::{verify_header, verify_misbehaviour};
 
 impl<V> ClientStateValidation<V> for ClientState
@@ -218,15 +221,13 @@ where
     // to be expired.
     let now = ctx.host_timestamp()?;
 
-    if let Some(elapsed_since_latest_consensus_state) =
-        now.duration_since(&latest_consensus_state.timestamp().into())
-    {
-        if elapsed_since_latest_consensus_state > client_state.trusting_period {
-            return Ok(Status::Expired);
-        }
-    }
+    let status = consensus_state_status(
+        &latest_consensus_state.into(),
+        &now,
+        client_state.trusting_period,
+    )?;
 
-    Ok(Status::Active)
+    Ok(status)
 }
 
 /// Check that the subject and substitute client states match as part of
@@ -277,5 +278,5 @@ where
         && subject_proof_specs == &substitute_proof_specs
         && subject_upgrade_path == &substitute_upgrade_path)
         .then_some(())
-        .ok_or(ClientError::ClientRecoveryStateMismatch)
+        .ok_or(ClientError::FailedToVerifyClientRecoveryStates)
 }

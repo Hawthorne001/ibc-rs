@@ -17,6 +17,7 @@ description = """
 
 [dependencies]
 # external dependencies
+bon             = { version = "3.1.1" }
 borsh           = { workspace = true, optional = true }
 derive_more     = { workspace = true }
 displaydoc      = { workspace = true }
@@ -25,7 +26,6 @@ schemars        = { workspace = true, optional = true }
 serde           = { workspace = true, optional = true }
 serde-json      = { workspace = true, optional = true }
 subtle-encoding = { workspace = true }
-typed-builder   = { version = "0.18.2" }
 
 # ibc dependencies
 ibc       = { workspace = true, features = [ "std" ] }
@@ -33,7 +33,7 @@ ibc-proto = { workspace = true }
 ibc-query = { workspace = true }
 
 # basecoin dependencies
-basecoin-store = { version = "0.1.0" }
+basecoin-store = { version = "0.2.0" }
 
 # cosmos dependencies
 tendermint         = { workspace = true }
@@ -46,6 +46,7 @@ rstest = { workspace = true }
 [features]
 default = [ "std" ]
 std = [
+  "hex/std",
   "serde/std",
   "serde-json/std",
   "ibc/std",

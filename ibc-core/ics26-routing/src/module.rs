@@ -3,7 +3,7 @@ use core::fmt::Debug;
 
 use ibc_core_channel_types::acknowledgement::Acknowledgement;
 use ibc_core_channel_types::channel::{Counterparty, Order};
-use ibc_core_channel_types::error::{ChannelError, PacketError};
+use ibc_core_channel_types::error::ChannelError;
 use ibc_core_channel_types::packet::Packet;
 use ibc_core_channel_types::Version;
 use ibc_core_host_types::identifiers::{ChannelId, ConnectionId, PortId};
@@ -134,28 +134,26 @@ pub trait Module: Debug {
         _packet: &Packet,
         _acknowledgement: &Acknowledgement,
         _relayer: &Signer,
-    ) -> Result<(), PacketError>;
+    ) -> Result<(), ChannelError>;
 
     fn on_acknowledgement_packet_execute(
         &mut self,
         _packet: &Packet,
         _acknowledgement: &Acknowledgement,
         _relayer: &Signer,
-    ) -> (ModuleExtras, Result<(), PacketError>);
+    ) -> (ModuleExtras, Result<(), ChannelError>);
 
     /// Note: `MsgTimeout` and `MsgTimeoutOnClose` use the same callback
-
     fn on_timeout_packet_validate(
         &self,
         packet: &Packet,
         relayer: &Signer,
-    ) -> Result<(), PacketError>;
+    ) -> Result<(), ChannelError>;
 
     /// Note: `MsgTimeout` and `MsgTimeoutOnClose` use the same callback
-
     fn on_timeout_packet_execute(
         &mut self,
         packet: &Packet,
         relayer: &Signer,
-    ) -> (ModuleExtras, Result<(), PacketError>);
+    ) -> (ModuleExtras, Result<(), ChannelError>);
 }

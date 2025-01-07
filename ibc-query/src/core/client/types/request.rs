@@ -2,6 +2,7 @@
 //! and from the corresponding gRPC proto types for the client module.
 
 use ibc::core::client::types::Height;
+use ibc::core::host::types::error::DecodingError;
 use ibc::core::host::types::identifiers::ClientId;
 use ibc::primitives::prelude::*;
 use ibc_proto::ibc::core::client::v1::{
@@ -82,7 +83,12 @@ impl TryFrom<RawQueryConsensusStateRequest> for QueryConsensusStateRequest {
             client_id: request.client_id.parse()?,
             consensus_height: (!request.latest_height)
                 .then(|| Height::new(request.revision_number, request.revision_height))
-                .transpose()?,
+                .transpose()
+                .map_err(|e| {
+                    DecodingError::invalid_raw_data(format!(
+                        "consensus state request consensus height: {e}"
+                    ))
+                })?,
             query_height: None,
         })
     }
@@ -198,6 +204,8 @@ impl From<RawQueryClientParamsRequest> for QueryClientParamsRequest {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct QueryUpgradedClientStateRequest {
+    /// The upgrade path
+    pub upgrade_path: Option<String>,
     /// Height at which the chain is scheduled to halt for upgrade
     pub upgrade_height: Option<Height>,
     /// The height at which to query the upgraded client state. If not provided,
@@ -208,6 +216,7 @@ pub struct QueryUpgradedClientStateRequest {
 impl From<RawUpgradedClientStateRequest> for QueryUpgradedClientStateRequest {
     fn from(_request: RawUpgradedClientStateRequest) -> Self {
         Self {
+            upgrade_path: None,
             upgrade_height: None,
             query_height: None,
         }
@@ -220,6 +229,8 @@ impl From<RawUpgradedClientStateRequest> for QueryUpgradedClientStateRequest {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct QueryUpgradedConsensusStateRequest {
+    /// The upgrade path
+    pub upgrade_path: Option<String>,
     /// The height at which the chain is scheduled to halt for upgrade.
     pub upgrade_height: Option<Height>,
     /// The height at which to query the upgraded consensus state. If not
@@ -230,6 +241,7 @@ pub struct QueryUpgradedConsensusStateRequest {
 impl From<RawUpgradedConsensusStateRequest> for QueryUpgradedConsensusStateRequest {
     fn from(_request: RawUpgradedConsensusStateRequest) -> Self {
         Self {
+            upgrade_path: None,
             upgrade_height: None,
             query_height: None,
         }

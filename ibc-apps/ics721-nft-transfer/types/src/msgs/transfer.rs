@@ -1,16 +1,13 @@
 //! Defines the Non-Fungible Token Transfer message type
 
-use ibc_core::channel::types::error::PacketError;
-use ibc_core::channel::types::timeout::TimeoutHeight;
-use ibc_core::handler::types::error::ContextError;
+use ibc_core::channel::types::timeout::{TimeoutHeight, TimeoutTimestamp};
+use ibc_core::host::types::error::DecodingError;
 use ibc_core::host::types::identifiers::{ChannelId, PortId};
 use ibc_core::primitives::prelude::*;
-use ibc_core::primitives::Timestamp;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::applications::nft_transfer::v1::MsgTransfer as RawMsgTransfer;
 use ibc_proto::Protobuf;
 
-use crate::error::NftTransferError;
 use crate::packet::PacketData;
 
 pub(crate) const TYPE_URL: &str = "/ibc.applications.nft_transfer.v1.MsgTransfer";
@@ -45,26 +42,15 @@ pub struct MsgTransfer {
     pub timeout_height_on_b: TimeoutHeight,
     /// Timeout timestamp relative to the current block timestamp.
     /// The timeout is disabled when set to 0.
-    pub timeout_timestamp_on_b: Timestamp,
+    pub timeout_timestamp_on_b: TimeoutTimestamp,
 }
 
 impl TryFrom<RawMsgTransfer> for MsgTransfer {
-    type Error = NftTransferError;
+    type Error = DecodingError;
 
     fn try_from(raw_msg: RawMsgTransfer) -> Result<Self, Self::Error> {
-        let timeout_timestamp_on_b = Timestamp::from_nanoseconds(raw_msg.timeout_timestamp)
-            .map_err(PacketError::InvalidPacketTimestamp)
-            .map_err(ContextError::from)?;
-
-        let timeout_height_on_b: TimeoutHeight = raw_msg
-            .timeout_height
-            .try_into()
-            .map_err(ContextError::from)?;
-
-        // Packet timeout height and packet timeout timestamp cannot both be unset.
-        if !timeout_height_on_b.is_set() && !timeout_timestamp_on_b.is_set() {
-            return Err(ContextError::from(PacketError::MissingTimeout))?;
-        }
+        let timeout_height_on_b: TimeoutHeight = raw_msg.timeout_height.try_into()?;
+        let timeout_timestamp_on_b: TimeoutTimestamp = raw_msg.timeout_timestamp.into();
 
         let memo = if raw_msg.memo.is_empty() {
             None
@@ -121,18 +107,16 @@ impl From<MsgTransfer> for RawMsgTransfer {
 impl Protobuf<RawMsgTransfer> for MsgTransfer {}
 
 impl TryFrom<Any> for MsgTransfer {
-    type Error = NftTransferError;
+    type Error = DecodingError;
 
     fn try_from(raw: Any) -> Result<Self, Self::Error> {
-        match raw.type_url.as_str() {
-            TYPE_URL => {
-                MsgTransfer::decode_vec(&raw.value).map_err(|e| NftTransferError::DecodeRawMsg {
-                    reason: e.to_string(),
-                })
-            }
-            _ => Err(NftTransferError::UnknownMsgType {
-                msg_type: raw.type_url,
-            }),
+        if let TYPE_URL = raw.type_url.as_str() {
+            MsgTransfer::decode_vec(&raw.value).map_err(Into::into)
+        } else {
+            Err(DecodingError::MismatchedResourceName {
+                expected: TYPE_URL.to_string(),
+                actual: raw.type_url,
+            })
         }
     }
 }

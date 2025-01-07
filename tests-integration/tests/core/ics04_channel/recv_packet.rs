@@ -1,6 +1,7 @@
 use ibc::core::channel::types::channel::{ChannelEnd, Counterparty, Order, State};
 use ibc::core::channel::types::msgs::{MsgRecvPacket, PacketMsg};
 use ibc::core::channel::types::packet::Packet;
+use ibc::core::channel::types::timeout::TimeoutTimestamp;
 use ibc::core::channel::types::Version;
 use ibc::core::client::types::Height;
 use ibc::core::commitment_types::commitment::CommitmentPrefix;
@@ -65,7 +66,7 @@ fn fixture() -> Fixture {
         ConnectionCounterparty::new(
             client_id.clone(),
             Some(ConnectionId::zero()),
-            CommitmentPrefix::try_from(vec![0]).expect("no error"),
+            CommitmentPrefix::empty(),
         ),
         ConnectionVersion::compatibles(),
         ZERO_DURATION,
@@ -141,6 +142,9 @@ fn recv_packet_validate_happy_path(fixture: Fixture) {
             packet.seq_on_a,
         );
 
+    // Note: For unordered channels, there's no need to set a packet receipt.
+    // The validation will pass whether the receipt exists or not.
+
     let msg_envelope = MsgEnvelope::from(PacketMsg::from(msg));
 
     let res = validate(&context.ibc_store, &router, msg_envelope);
@@ -172,7 +176,7 @@ fn recv_packet_timeout_expired(fixture: Fixture) {
         chan_id_on_b: ChannelId::zero(),
         data: Vec::new(),
         timeout_height_on_b: client_height.into(),
-        timeout_timestamp_on_b: Timestamp::from_nanoseconds(1).unwrap(),
+        timeout_timestamp_on_b: TimeoutTimestamp::from_nanoseconds(1),
     };
 
     let msg_packet_old = dummy_msg_recv_packet(

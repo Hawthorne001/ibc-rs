@@ -1,28 +1,26 @@
 //! Defines the client state type for the ICS-08 Wasm light client.
 
-#[cfg(feature = "cosmwasm")]
-use cosmwasm_schema::cw_serde;
 use ibc_core_client::types::Height;
+use ibc_core_host_types::error::DecodingError;
 use ibc_primitives::prelude::*;
 use ibc_primitives::proto::{Any, Protobuf};
 use ibc_proto::ibc::lightclients::wasm::v1::ClientState as RawClientState;
 
-use crate::error::Error;
-#[cfg(feature = "cosmwasm")]
+#[cfg(feature = "serde")]
 use crate::serializer::Base64;
 use crate::Bytes;
 
 pub const WASM_CLIENT_STATE_TYPE_URL: &str = "/ibc.lightclients.wasm.v1.ClientState";
 
-#[cfg_attr(feature = "cosmwasm", cw_serde)]
-#[cfg_attr(not(feature = "cosmwasm"), derive(Clone, Debug, PartialEq))]
-#[derive(Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClientState {
-    #[cfg_attr(feature = "cosmwasm", schemars(with = "String"))]
-    #[cfg_attr(feature = "cosmwasm", serde(with = "Base64", default))]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    #[cfg_attr(feature = "serde", serde(with = "Base64", default))]
     pub data: Bytes,
-    #[cfg_attr(feature = "cosmwasm", schemars(with = "String"))]
-    #[cfg_attr(feature = "cosmwasm", serde(with = "Base64", default))]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    #[cfg_attr(feature = "serde", serde(with = "Base64", default))]
     pub checksum: Bytes,
     pub latest_height: Height,
 }
@@ -40,18 +38,15 @@ impl From<ClientState> for RawClientState {
 }
 
 impl TryFrom<RawClientState> for ClientState {
-    type Error = Error;
+    type Error = DecodingError;
 
     fn try_from(raw: RawClientState) -> Result<Self, Self::Error> {
         let latest_height = raw
             .latest_height
-            .ok_or(Error::InvalidLatestHeight {
-                reason: "missing latest height".to_string(),
-            })?
-            .try_into()
-            .map_err(|_| Error::InvalidLatestHeight {
-                reason: "invalid protobuf latest height".to_string(),
-            })?;
+            .ok_or(DecodingError::missing_raw_data(
+                "client state latest height",
+            ))?
+            .try_into()?;
         Ok(Self {
             data: raw.data,
             checksum: raw.checksum,
@@ -72,23 +67,16 @@ impl From<ClientState> for Any {
 }
 
 impl TryFrom<Any> for ClientState {
-    type Error = Error;
+    type Error = DecodingError;
 
     fn try_from(any: Any) -> Result<Self, Self::Error> {
-        fn decode_client_state(value: &[u8]) -> Result<ClientState, Error> {
-            let client_state =
-                Protobuf::<RawClientState>::decode(value).map_err(|e| Error::DecodeError {
-                    reason: e.to_string(),
-                })?;
-
-            Ok(client_state)
-        }
-
-        match any.type_url.as_str() {
-            WASM_CLIENT_STATE_TYPE_URL => decode_client_state(&any.value),
-            _ => Err(Error::DecodeError {
-                reason: "type_url does not match".into(),
-            }),
+        if let WASM_CLIENT_STATE_TYPE_URL = any.type_url.as_str() {
+            Protobuf::<RawClientState>::decode(any.value.as_ref()).map_err(Into::into)
+        } else {
+            Err(DecodingError::MismatchedResourceName {
+                expected: WASM_CLIENT_STATE_TYPE_URL.to_string(),
+                actual: any.type_url,
+            })
         }
     }
 }

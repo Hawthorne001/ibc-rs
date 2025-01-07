@@ -5,7 +5,7 @@ on:
       - .codecov.yaml
       - .github/workflows/rust.yaml
       - .github/workflows/coverage.yaml
-      - Cargo.toml
+      - "*.toml"
       - ci/**
       - ibc/**
       - ibc-core/**
@@ -16,6 +16,7 @@ on:
       - ibc-query/**
       - ibc-testkit/**
       - ibc-derive/**
+      - tests-integration/**
   push:
     branches:
       - main
@@ -53,7 +54,7 @@ jobs:
       - name: Generate code coverage
         run: cargo llvm-cov nextest --all-features --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
